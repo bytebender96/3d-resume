@@ -2,38 +2,55 @@ import * as THREE from 'three'
 import { RESUME } from '../data'
 
 // World-space layout of the scene. Tweak freely.
-export const HEAD = new THREE.Vector3(0, 1.55, 0)
-const ANCHOR_RADIUS = 2.6
 
-/** Floating "memory" objects — one per resume entry, spiralling around the character. */
+/** Avatar scale (the model is 1.83 m tall) */
+export const AVATAR_SCALE = 1.5
+export const HEAD = new THREE.Vector3(0, 2.45, 0.05)
+
 const N = RESUME.length
-const SPREAD = Math.min(1.35, 5.4 / Math.max(N - 1, 1)) // angle between objects; stays under one lap
+const RADIUS = 1.5
+const START_ANGLE = 0.55 // radians from straight ahead; leaves the space in front of the face clear
+const SWEEP = 5.2 // how far around the avatar the icons spiral
+const TOP = 2.9
+const BOTTOM = 0.8
+
+/** One floating icon per resume entry, spiralling around the avatar from head height down */
 export const ANCHORS = RESUME.map((_, i) => {
-  const a = -0.9 + i * SPREAD
-  const y = 2.6 - (i / Math.max(N - 1, 1)) * 2.0
-  return new THREE.Vector3(Math.sin(a) * ANCHOR_RADIUS, y, Math.cos(a) * ANCHOR_RADIUS * 0.8)
+  const t = N > 1 ? i / (N - 1) : 0
+  const a = START_ANGLE + t * SWEEP
+  return new THREE.Vector3(Math.sin(a) * RADIUS, TOP - t * (TOP - BOTTOM), Math.cos(a) * RADIUS)
 })
 
 export type Shot = { pos: THREE.Vector3; look: THREE.Vector3; focus: THREE.Vector3 }
 
 /**
- * Camera keyframes: hero → one per resume entry → works.
+ * Camera keyframes: hero → one per resume entry → wide.
  * Scroll position is mapped onto this list (see App.tsx), so each resume card
- * centred on screen lines up exactly with its shot.
+ * centred on screen lines up exactly with its icon.
  */
-export const SHOTS: Shot[] = [
-  // Hero: character on the right third, text on the left
-  { pos: new THREE.Vector3(-0.9, 1.7, 6), look: new THREE.Vector3(-1.3, 1.2, 0), focus: HEAD.clone() },
-  ...ANCHORS.map((p) => {
+export function buildShots(portrait: boolean): Shot[] {
+  const hero: Shot = portrait
+    ? { pos: new THREE.Vector3(0, 2.3, 11), look: new THREE.Vector3(0, 0.4, 0), focus: HEAD.clone() }
+    : { pos: new THREE.Vector3(-0.9, 2.05, 6.8), look: new THREE.Vector3(-1.15, 1.65, 0.2), focus: HEAD.clone() }
+
+  const closeUps = ANCHORS.map((p) => {
     const out = p.clone().setY(0).normalize()
-    // Stand outside the anchor, slightly to the side, so the object sits right of the text column
+    // Stand outside the icon and a little to one side, so the avatar is visible behind it
     const side = new THREE.Vector3(-out.z, 0, out.x)
+    if (portrait) {
+      return {
+        pos: p.clone().addScaledVector(out, 3.2).add(new THREE.Vector3(0, 0.5, 0)),
+        look: p.clone().add(new THREE.Vector3(0, -0.45, 0)),
+        focus: p.clone(),
+      }
+    }
     return {
-      pos: p.clone().addScaledVector(out, 3.3).addScaledVector(side, 0.9).add(new THREE.Vector3(0, 0.35, 0)),
-      look: p.clone().addScaledVector(side, 0.75),
+      pos: p.clone().addScaledVector(out, 3.3).addScaledVector(side, 1.0).add(new THREE.Vector3(0, 0.3, 0)),
+      look: p.clone().addScaledVector(side, 1.0),
       focus: p.clone(),
     }
-  }),
-  // Works: pull back into a wide establishing shot
-  { pos: new THREE.Vector3(0, 3.4, 11), look: new THREE.Vector3(0, 1.2, 0), focus: HEAD.clone() },
-]
+  })
+
+  const wide: Shot = { pos: new THREE.Vector3(0, 3.6, 12.5), look: new THREE.Vector3(0, 1.6, 0), focus: HEAD.clone() }
+  return [hero, ...closeUps, wide]
+}

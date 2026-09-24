@@ -149,4 +149,8 @@ h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
 @media (max-width: 640px) { .cert-list li { flex-direction: column; gap: 2px; } }
 /* Keep hero copy legible over floating objects */
 .hero { background: linear-gradient(90deg, rgba(11,12,18,0.85) 0%, rgba(11,12,18,0.6) 35%, transparent 60%); }
-@media (max-width: 640px) { .hero { background: linear-gradient(180deg, transparent 10%, rgba(11,12,18,0.75) 45%, transparent 90%); } }
+@media (max-width: 640px) {
+  .hero { justify-content: flex-end; padding-bottom: 14svh; background: linear-gradient(180deg, transparent 45%, rgba(11,12,18,0.85) 65%); }
+  .hero h1 { font-size: 52px; }
+  .hero .lead { font-size: 17px; }
+}

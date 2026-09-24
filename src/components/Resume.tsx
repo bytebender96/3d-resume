@@ -13,7 +13,7 @@ export function Resume() {
         <div key={i} data-entry className={`entry ${active === i ? 'is-active' : ''}`}>
           <article className="card col">
             <div className="entry-meta">
-              <span className="entry-index">{String(i + 1).padStart(2, '0')}</span>
+              <span className="entry-index">{e.chapter}</span>
               <span>{e.period}</span>
             </div>
             <h3>{e.title}</h3>
