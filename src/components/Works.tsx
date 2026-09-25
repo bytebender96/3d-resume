@@ -65,7 +65,7 @@ export function Works() {
           <div className="links footer-links">
             {PROFILE.links.map((l) => <a key={l.label} href={l.href} target="_blank" rel="noreferrer">{l.label} ↗</a>)}
           </div>
-          <p className="fine">{PROFILE.location} · Off the clock: {HOBBIES.join(', ').toLowerCase()} · © {new Date().getFullYear()} {PROFILE.name}</p>
+          <p className="fine">{PROFILE.location} · © {new Date().getFullYear()} {PROFILE.name}</p>
         </footer>
       </div>
     </section>

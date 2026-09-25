@@ -521,3 +521,180 @@ export async function makeSticker(s: Sticker): Promise<StickerTexture> {
   const k = PX_TO_WORLD * (s.scale ?? 1)
   return { texture, width: cut.width * k, height: cut.height * k, holo: style === 'holo' }
 }
+
+// ─── books on the shelf ─────────────────────────────────────────────────
+
+const GOLD = '#e2c07a'
+
+function tex(c: HTMLCanvasElement) {
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.anisotropy = 8
+  return t
+}
+
+/** Cloth texture with a little weave + wear */
+function cloth(ctx: CanvasRenderingContext2D, w: number, h: number, color: string) {
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, w, h)
+  ctx.globalAlpha = 0.05
+  for (let y = 0; y < h; y += 3) { ctx.fillStyle = y % 6 ? '#000' : '#fff'; ctx.fillRect(0, y, w, 1) }
+  for (let x = 0; x < w; x += 3) { ctx.fillStyle = x % 6 ? '#000' : '#fff'; ctx.fillRect(x, 0, 1, h) }
+  ctx.globalAlpha = 1
+  grain(ctx, w, h, 0.05)
+}
+
+/** Wrap text into lines that fit `width` */
+function wrap(ctx: CanvasRenderingContext2D, text: string, width: number) {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > width && line) { lines.push(line); line = word } else line = test
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+/** Front cover: cloth, gold frame, title, the entry's main sticker in the middle */
+export function makeCover(title: string, org: string, color: string, sticker: StickerTexture | undefined, aspect: number) {
+  const w = 900, h = Math.round(w / aspect)
+  const [c, ctx] = canvas(w, h)
+  cloth(ctx, w, h, color)
+  ctx.strokeStyle = GOLD
+  ctx.lineWidth = 6
+  ctx.strokeRect(40, 40, w - 80, h - 80)
+  ctx.lineWidth = 2
+  ctx.strokeRect(58, 58, w - 116, h - 116)
+  ctx.fillStyle = GOLD
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const lines = (() => { ctx.font = `700 64px ${SERIF}`; return wrap(ctx, title, w - 200).slice(0, 3) })()
+  lines.forEach((l, i) => ctx.fillText(l, w / 2, 170 + i * 76))
+  fit(ctx, org.toUpperCase(), w - 200, 30, MONO, 700)
+  ctx.fillText(org.toUpperCase(), w / 2, h - 120)
+  if (sticker) {
+    const img = sticker.texture.image as HTMLCanvasElement
+    const box = { w: w * 0.62, h: h * 0.42 }
+    const k = Math.min(box.w / img.width, box.h / img.height)
+    ctx.drawImage(img, w / 2 - (img.width * k) / 2, h * 0.6 - (img.height * k) / 2, img.width * k, img.height * k)
+  }
+  return tex(c)
+}
+
+/** Spine: cloth, gold bands, label running bottom-to-top */
+export function makeSpine(label: string, color: string, aspect: number) {
+  const h = 1024, w = Math.max(64, Math.round(h * aspect))
+  const [c, ctx] = canvas(w, h)
+  cloth(ctx, w, h, color)
+  ctx.fillStyle = GOLD
+  for (const y of [60, 80, h - 90, h - 70]) ctx.fillRect(0, y, w, 6)
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  ctx.rotate(-Math.PI / 2)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  fit(ctx, label.toUpperCase(), h - 260, Math.min(58, w * 0.55), SERIF, 700)
+  ctx.fillText(label.toUpperCase(), 0, 3)
+  ctx.restore()
+  return tex(c)
+}
+
+export type HeadingInfo = { chapter: string; period: string; title: string; org: string; summary: string; stats?: { value: string; label: string }[] }
+
+/** Left-hand page of the open book: the entry printed like a résumé page */
+export function makeHeading(p: HeadingInfo, index: number, total: number, aspect: number) {
+  const w = 1000, h = Math.round(w / aspect)
+  const [c, ctx] = canvas(w, h)
+  ctx.fillStyle = '#f7f1e3'
+  ctx.fillRect(0, 0, w, h)
+  // Gutter shadow toward the spine (right edge of this page)
+  const g = ctx.createLinearGradient(w - 90, 0, w, 0)
+  g.addColorStop(0, 'rgba(0,0,0,0)')
+  g.addColorStop(1, 'rgba(0,0,0,0.18)')
+  ctx.fillStyle = g
+  ctx.fillRect(w - 90, 0, 90, h)
+
+  const ink = '#1d2230', accent = '#8a3a22'
+  const x = 90
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = `800 26px ${MONO}`
+  const tab = p.chapter.toUpperCase()
+  const tw = ctx.measureText(tab).width + 40
+  ctx.fillStyle = accent
+  ctx.beginPath(); ctx.roundRect(x, 80, tw, 50, 8); ctx.fill()
+  ctx.fillStyle = '#fff'
+  ctx.fillText(tab, x + 20, 114)
+  ctx.fillStyle = '#6b7080'
+  ctx.textAlign = 'right'
+  ctx.fillText(p.period.toUpperCase(), w - 90, 114)
+  ctx.textAlign = 'left'
+
+  ctx.fillStyle = ink
+  ctx.font = `700 76px ${SERIF}`
+  const titleLines = wrap(ctx, p.title, w - 180).slice(0, 3)
+  titleLines.forEach((l, i) => ctx.fillText(l, x, 235 + i * 84))
+  let y = 235 + titleLines.length * 84
+  ctx.fillStyle = accent
+  ctx.font = `600 40px ${ROUND}`
+  wrap(ctx, p.org, w - 180).slice(0, 2).forEach((l) => { ctx.fillText(l, x, y); y += 50 })
+  y += 20
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'
+  ctx.lineWidth = 2
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(w - 90, y); ctx.stroke()
+  y += 64
+  ctx.fillStyle = '#343a4a'
+  ctx.font = `400 46px ${SERIF}`
+  for (const l of wrap(ctx, p.summary, w - 180).slice(0, 8)) { ctx.fillText(l, x, y); y += 64 }
+  if (p.stats?.length) {
+    y += 40
+    const colW = (w - 180) / p.stats.length
+    p.stats.forEach((s, i) => {
+      ctx.fillStyle = ink
+      ctx.font = `700 84px ${SERIF}`
+      ctx.fillText(s.value, x + i * colW, y + 40)
+      ctx.fillStyle = '#6b7080'
+      ctx.font = `600 28px ${MONO}`
+      ctx.fillText(s.label.toUpperCase(), x + i * colW, y + 90)
+    })
+  }
+  ctx.fillStyle = '#9aa0ad'
+  ctx.font = `600 24px ${MONO}`
+  ctx.fillText(`${index + 1} / ${total}`, x, h - 60)
+  grain(ctx, w, h, 0.025)
+  return tex(c)
+}
+
+/** Right-hand page: plain paper (stickers go on top as meshes) */
+export function makePaper(aspect: number) {
+  const w = 600, h = Math.round(w / aspect)
+  const [c, ctx] = canvas(w, h)
+  ctx.fillStyle = '#f7f1e3'
+  ctx.fillRect(0, 0, w, h)
+  const g = ctx.createLinearGradient(0, 0, 60, 0)
+  g.addColorStop(0, 'rgba(0,0,0,0.16)')
+  g.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 60, h)
+  grain(ctx, w, h, 0.025)
+  return tex(c)
+}
+
+/** Wood grain for the shelf */
+export function makeWood(base: string) {
+  const [c, ctx] = canvas(512, 512)
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, 512, 512)
+  for (let i = 0; i < 140; i++) {
+    const y = Math.random() * 512
+    ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,220,180,0.06)'
+    ctx.lineWidth = Math.random() * 2.5 + 0.5
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    for (let x = 0; x <= 512; x += 32) ctx.lineTo(x, y + Math.sin(x * 0.02 + i) * 3)
+    ctx.stroke()
+  }
+  const t = tex(c)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  return t
+}

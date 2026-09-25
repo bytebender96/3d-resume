@@ -6,7 +6,7 @@ export function Resume() {
   return (
     <section id="resume" className="resume">
       <div className="col">
-        <p className="eyebrow">Resume</p>
+        {/* <p className="eyebrow">Resume</p> */}
         <h2>My journey</h2>
       </div>
       {RESUME.map((e, i) => (

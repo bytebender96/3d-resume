@@ -64,7 +64,9 @@ export type ResumeEntry = {
   /** Headline numbers shown large on the card */
   stats?: { value: string; label: string }[]
   tags: string[]
-  /** This entry's sticker cluster on the briefcase */
+  /** Short label printed on the book's spine */
+  spine: string
+  /** Stickers inside the book (the first one also goes on the cover) */
   stickers: Sticker[]
 }
 
@@ -75,6 +77,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Education',
     period: '2016 — 2019',
     title: 'B.IT (Hons), Software Engineering',
+    spine: 'B.IT · UTP',
     org: 'Universiti Teknologi PETRONAS',
     summary: 'Bachelor of Information Technology with a Software Engineering major. GPA 3.41.',
     tags: ['Software Engineering'],
@@ -89,8 +92,9 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Education',
     period: '2018 — 2019',
     title: 'Research Trainee',
+    spine: 'Hitachi · Japan',
     org: 'Center for Exploratory Research, Hitachi Ltd. · Saitama, Japan',
-    summary: 'Research traineeship at Hitachi’s Center for Exploratory Research in Japan.',
+    summary: 'Research trainee internship at Hitachi’s Center for Exploratory Research in Japan. Worked on a project to improve the accuracy of a machine learning model for predicting equipment failures.',
     tags: ['Research', 'Japan'],
     stickers: [
       { style: 'logo', logo: 'hitachi.svg', text: 'Hitachi', scale: 1.6 },
@@ -104,8 +108,9 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Work',
     period: '2020 — 2021',
     title: 'Graduate Trainee',
+    spine: 'Nielsen',
     org: 'Nielsen',
-    summary: 'Started my career in data operations through the Nielsen graduate programme.',
+    summary: 'Started my career in data operations through the Nielsen graduate programme. Learned the ropes of data processing, validation and reporting, and contributed to several process improvement initiatives.',
     tags: ['Data Operations'],
     stickers: [
       { style: 'logo', logo: 'nielsen.svg', text: 'Nielsen', scale: 1.2 },
@@ -117,6 +122,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Work',
     period: 'Jan 2021 — Sep 2022',
     title: 'Data Processing Specialist',
+    spine: 'NIQ · Specialist',
     org: 'NielsenIQ',
     summary:
       'Built Python scripts and automation that made data processing faster and more accurate, and produced analytical reports with cross-functional teams.',
@@ -136,6 +142,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Work',
     period: 'Oct 2022 — Jan 2024',
     title: 'Senior Data Processing Specialist',
+    spine: 'NIQ · Senior',
     org: 'NielsenIQ',
     summary:
       'Introduced SOPs and automation tools for data quality, led process-improvement and training initiatives, and mentored junior team members.',
@@ -155,7 +162,8 @@ export const RESUME: ResumeEntry[] = [
   {
     chapter: 'Work',
     period: 'Feb 2024 — Now',
-    title: 'Team Lead, Operations',
+    title: 'Associate Manager, Operations',
+    spine: 'NIQ · Assoc. Manager',
     org: 'NielsenIQ',
     summary:
       'Leading data strategy and governance for regional operations — closing process gaps, driving compliance and turning market research into strategic insight for cross-functional teams.',
@@ -175,6 +183,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Recognition',
     period: '2024',
     title: 'Digital Champion',
+    spine: 'Digital Champion',
     org: 'Hall of Fame Awards · NIQ',
     summary:
       'Impact Award for driving digital transformation — optimising data processes, expanding automation and making reporting more efficient.',
@@ -190,6 +199,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Recognition',
     period: '2023',
     title: 'Team of the Year · NOC Star · Most Valuable Team',
+    spine: 'Awards 2023',
     org: 'NIQ',
     summary:
       'Part of the Malaysia–Singapore Operations team recognised for the best performance in the region, plus a NOC Star Award for training new Data Validation staff.',
@@ -206,6 +216,7 @@ export const RESUME: ResumeEntry[] = [
     chapter: 'Toolkit',
     period: 'Always learning',
     title: 'Certifications & tools',
+    spine: 'Toolkit',
     org: 'Google · IBM · NielsenIQ',
     summary:
       'Google Data Analytics and IT certificates, IBM Python for data analysis and visualisation, and NIQ’s RACE Machine Learning programme.',

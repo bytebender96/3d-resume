@@ -4,7 +4,8 @@ import { Bloom, DepthOfField, EffectComposer, SMAA, Vignette } from '@react-thre
 import { Suspense, useMemo, useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import type { DepthOfFieldEffect } from 'postprocessing'
-import { Anchors } from './Anchors'
+import { Books } from './Books'
+import { Bookshelf } from './Bookshelf'
 import { CameraRig } from './CameraRig'
 import { Character } from './Character'
 
@@ -36,7 +37,8 @@ export function Scene() {
 
       <CameraRig focus={focus} />
       <AutoFocus dof={dof} focus={focus} />
-      <Anchors />
+      <Bookshelf />
+      <Books />
       <Suspense fallback={null}>
         <Character />
       </Suspense>

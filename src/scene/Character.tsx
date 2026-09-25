@@ -3,32 +3,43 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store'
-import { ANCHORS, AVATAR_SCALE } from './layout'
+import { AVATAR_SCALE, spreadCentre } from './layout'
 
 const MODEL = `${import.meta.env.BASE_URL}models/avatar.glb`
 const HEAD_FOLLOW = 0.3 // how much of the way the head turns toward the look target
 const EYE_FOLLOW = 1 // eyes go all the way
 const LOOK_RANGE = new THREE.Vector2(1.6, 1.0) // how far (m) the cursor moves the look target around the camera
 const SMILE = 0.25
-// Arms crossed over the chest. Positions are world-space (avatar stands at the origin facing +Z).
-// The left forearm sits on top; the right hand tucks under the left upper arm.
-const CROSS = {
-  Left: {
-    wrist: new THREE.Vector3(-0.15, 1.86, 0.3),
-    fingers: new THREE.Vector3(-0.55, -0.1, -1), // fingers wrap around the right upper arm
-    palm: new THREE.Vector3(1, -0.2, -0.3),
-    pole: new THREE.Vector3(1, -0.7, -0.35), // elbow out and down
-  },
-  Right: {
-    wrist: new THREE.Vector3(0.15, 1.8, 0.24),
-    fingers: new THREE.Vector3(0.55, 0.05, -1), // tucked under the left arm
-    palm: new THREE.Vector3(-1, 0.2, -0.3),
-    pole: new THREE.Vector3(-1, -0.7, -0.35),
-  },
-  curl: [0.45, 0.6, 0.45],
-  thumb: [0.5, 0.6, 0.4],
+// Relaxed standing pose: arms hang by the sides, elbows softly bent, palms toward the thighs
+const STAND = {
+  drop: 0.95, // wrist height below the shoulder, as a fraction of full arm length
+  out: 0.1, // wrist distance out from the shoulder (m)
+  forward: 0.05, // wrist slightly in front of the shoulder (m)
+  pole: new THREE.Vector3(0.2, 0, -1), // elbows point back (x is mirrored per side)
+  fingers: new THREE.Vector3(0.05, -1, 0.12), // fingers point down (x mirrored)
+  palm: new THREE.Vector3(-1, 0, 0.15), // palm faces the thigh (x mirrored)
+  curl: [0.3, 0.4, 0.3], // loose, natural finger curl
+  thumb: [0.15, 0.25, 0.2],
 }
-const BREATH = 0.012 // how much the crossed arms rise and fall
+const SWAY = 0.012 // gentle arm sway with the breath (m)
+
+// Weight on the right leg (contrapposto): hips shift over it and its hip rises,
+// the left knee relaxes, and the shoulders tilt the other way. Feet stay planted.
+const WEIGHT = {
+  shift: new THREE.Vector3(-0.035, -0.03, 0), // hips move toward the right leg (−x) and settle down a touch (m)
+  roll: 0.05, // pelvis tilt, right hip up (radians)
+  counter: 1.25, // spine tilts back the other way by this multiple, so the shoulders counter the hips
+  sway: 0.006, // slow side-to-side weight drift (m)
+}
+// Right hand in the trouser pocket (wrist position relative to the hips, in metres)
+const POCKET = {
+  wrist: new THREE.Vector3(-0.255, 0.0, 0.035),
+  pole: new THREE.Vector3(-0.8, 0, -1), // elbow out and back
+  fingers: new THREE.Vector3(0.3, -1, 0.05), // down and in, disappearing into the pocket
+  palm: new THREE.Vector3(1, 0, 0.2), // toward the thigh
+  curl: [0.15, 0.25, 0.2],
+  thumb: [0, 0, 0], // thumb hooked outside the pocket
+}
 
 const v1 = new THREE.Vector3()
 const v2 = new THREE.Vector3()
@@ -119,6 +130,22 @@ export function Character() {
       }
     }
 
+    const hips = keep(bone('Hips'))
+    const hipsRestPos = hips.position.clone()
+    const spine = keep(bone('Spine1'))
+    const leg = (side: 'Left' | 'Right') => {
+      const up = keep(bone(`${side}UpLeg`)), low = keep(bone(`${side}Leg`)), foot = keep(bone(`${side}Foot`))
+      return {
+        up, low, foot,
+        side: side === 'Left' ? 1 : -1,
+        l1: pos(up).distanceTo(pos(low)),
+        l2: pos(low).distanceTo(pos(foot)),
+        footPos: pos(foot),
+        footRot: foot.getWorldQuaternion(new THREE.Quaternion()),
+      }
+    }
+    const legs = [leg('Left'), leg('Right')]
+
     const head = keep(bone('Head'))
     const neck = keep(bone('Neck'))
     const eyes = [keep(bone('LeftEye')), keep(bone('RightEye'))]
@@ -141,27 +168,55 @@ export function Character() {
     setMorph('mouthSmileLeft', SMILE)
     setMorph('mouthSmileRight', SMILE)
 
-    return { arms: [arm('Left'), arm('Right')], head, neck, eyes, eyeRest, headRest, neckRest, rest, setMorph }
+    return { arms: [arm('Left'), arm('Right')], legs, hips, hipsRestPos, spine, head, neck, eyes, eyeRest, headRest, neckRest, rest, setMorph }
   }, [scene])
 
   useEffect(() => useStore.getState().set({ ready: true }), [])
 
   useFrame((state, dt) => {
-    const { arms, head, neck, eyes, eyeRest, headRest, neckRest, rest, setMorph } = rig
+    const { arms, legs, hips, hipsRestPos, spine, head, neck, eyes, eyeRest, headRest, neckRest, rest, setMorph } = rig
     const now = state.clock.elapsedTime
     for (const [b, q] of rest) b.quaternion.copy(q)
+    hips.position.copy(hipsRestPos)
     scene.updateMatrixWorld(true)
 
-    // ── Arms crossed: two-bone IK per arm, then hand orientation and a loose curl ──
-    const breath = Math.sin(now * 1.4) * BREATH
+    // ── Weight shift: move & tilt the pelvis, counter-tilt the spine, then re-plant the feet ──
+    const drift = Math.sin(now * 0.45) * WEIGHT.sway
+    const shift = WEIGHT.shift.clone().add(new THREE.Vector3(drift, 0, 0)).divideScalar(AVATAR_SCALE) // hips live in model space
+    hips.position.add(shift)
+    hips.updateMatrixWorld(true)
+    rotateWorld(hips, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -WEIGHT.roll))
+    rotateWorld(spine, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), WEIGHT.roll * WEIGHT.counter))
+    for (const l of legs) {
+      const hip = l.up.getWorldPosition(new THREE.Vector3())
+      const toFoot = l.footPos.clone().sub(hip)
+      const d = THREE.MathUtils.clamp(toFoot.length(), Math.abs(l.l1 - l.l2) + 1e-3, l.l1 + l.l2 - 1e-4)
+      const dir = toFoot.normalize()
+      const pole = new THREE.Vector3(l.side * 0.1, 0, 1) // knees point forward
+      const perp = pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize()
+      const along = (l.l1 * l.l1 - l.l2 * l.l2 + d * d) / (2 * d)
+      const knee = hip.clone().addScaledVector(dir, along).addScaledVector(perp, Math.sqrt(Math.max(0, l.l1 * l.l1 - along * along)))
+      swing(l.up, l.low.getWorldPosition(new THREE.Vector3()), knee)
+      swing(l.low, l.foot.getWorldPosition(new THREE.Vector3()), hip.clone().addScaledVector(dir, d))
+      // Keep the foot flat, as in the rest pose
+      l.foot.quaternion.copy(l.foot.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(l.footRot))
+      l.foot.updateMatrixWorld(true)
+    }
+
+    // ── Arms relaxed by the sides: two-bone IK per arm, then hand orientation and a loose curl ──
+    const hipsPos = hips.getWorldPosition(new THREE.Vector3())
     for (const a of arms) {
-      const pose = a.side > 0 ? CROSS.Left : CROSS.Right
+      const pocket = a.side < 0 // right hand goes in the pocket
+      const m = new THREE.Vector3(a.side, 1, 1) // mirror x for the right side
       const shoulder = a.upper.getWorldPosition(new THREE.Vector3())
-      const target = pose.wrist.clone().multiplyScalar(AVATAR_SCALE / 1.5).add(new THREE.Vector3(0, breath, 0))
+      const sway = Math.sin(now * 1.2) * SWAY
+      const target = pocket
+        ? hipsPos.clone().add(POCKET.wrist)
+        : shoulder.clone().add(new THREE.Vector3(a.side * STAND.out, -(a.l1 + a.l2) * STAND.drop, STAND.forward + sway))
       const toTarget = target.clone().sub(shoulder)
       const d = THREE.MathUtils.clamp(toTarget.length(), Math.abs(a.l1 - a.l2) + 1e-3, a.l1 + a.l2 - 1e-3)
       const dir = toTarget.normalize()
-      const pole = pose.pole.clone()
+      const pole = pocket ? POCKET.pole.clone() : STAND.pole.clone().multiply(m)
       const perp = pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize()
       const along = (a.l1 * a.l1 - a.l2 * a.l2 + d * d) / (2 * d)
       const up = Math.sqrt(Math.max(0, a.l1 * a.l1 - along * along))
@@ -170,15 +225,17 @@ export function Character() {
       swing(a.lower, a.hand.getWorldPosition(new THREE.Vector3()), shoulder.clone().addScaledVector(dir, d))
 
       // Hand orientation (absolute, from the rest pose where palms face down)
-      const fingers = pose.fingers.clone().normalize()
-      const palm = pose.palm.clone().normalize()
+      const fingers = (pocket ? POCKET.fingers.clone() : STAND.fingers.clone().multiply(m)).normalize()
+      const palm = (pocket ? POCKET.palm.clone() : STAND.palm.clone().multiply(m)).normalize()
       const world = frameDelta(a.fingersRest, new THREE.Vector3(0, -1, 0), fingers, palm).multiply(a.handRest)
       a.hand.quaternion.copy(a.hand.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world))
       a.hand.updateMatrixWorld(true)
 
       const axis = fingers.clone().cross(palm.clone().sub(fingers.clone().multiplyScalar(palm.dot(fingers))).normalize()).normalize()
-      for (const chain of a.fingers) chain.forEach((j, k) => rotateWorld(j, new THREE.Quaternion().setFromAxisAngle(axis, CROSS.curl[k])))
-      a.thumb.forEach((j, k) => rotateWorld(j, new THREE.Quaternion().setFromAxisAngle(axis, CROSS.thumb[k])))
+      const curl = pocket ? POCKET.curl : STAND.curl
+      const thumb = pocket ? POCKET.thumb : STAND.thumb
+      for (const chain of a.fingers) chain.forEach((j, k) => rotateWorld(j, new THREE.Quaternion().setFromAxisAngle(axis, curl[k])))
+      a.thumb.forEach((j, k) => rotateWorld(j, new THREE.Quaternion().setFromAxisAngle(axis, thumb[k])))
     }
 
     // ── Look target: toward the camera, nudged by the cursor ──
@@ -187,10 +244,10 @@ export function Character() {
       .add(new THREE.Vector3(aim.current.x * LOOK_RANGE.x, aim.current.y * LOOK_RANGE.y, 0).applyQuaternion(camera.quaternion))
 
 
-    // Glance toward the icon being read
+    // Glance toward the book being read
     const active = useStore.getState().activeEntry
     glance.current = THREE.MathUtils.damp(glance.current, active >= 0 ? 0.55 : 0, 3, dt)
-    if (active >= 0) lastIcon.current.copy(ANCHORS[active])
+    if (active >= 0) lastIcon.current.copy(spreadCentre(active))
     look.lerp(lastIcon.current, glance.current)
 
     // Each bone's "forward" = +Z (the model faces +Z) carried by its rotation since the rest pose
